@@ -18,12 +18,12 @@
  * modify it under the terms of the GNU General Public License
  * version 2 as published by the Free Software Foundation.
  *
- *******************************
+ ******************************
  *
  */
 // Enable MY_DEBUG flag for MY_DEBUG prints. This will add a lot to the size of the final sketch but good
 // to see what is actually is happening when developing
-#define MY_DEBUG 
+#define MY_DEBUG
 
 
 // Enable and select radio type attached
