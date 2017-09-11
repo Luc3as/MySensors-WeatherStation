@@ -97,4 +97,4 @@ There are some configuration steps needed such as adjusting the voltage divider 
     int SOLAR_SENSE_PIN = A3;  // select the input pin for the solar panel sense point
     int MOISTURE_SENSE_PIN = A1;  // select the input pin for the soil mosture sensor
     int TIP_SENSOR_PIN = 3; // input pin where reed switch or hall effect sensor is attached
-    int SEND_DATA_EVERY = 5 ; // send data to controller every n minutes
+    int SEND_DATA_EVERY = 5 ; // send data to controller every n minutes 
