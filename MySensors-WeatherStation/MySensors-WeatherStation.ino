@@ -15,7 +15,7 @@
  * Support Forum: http://forum.mysensors.org
  *
  * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License 
+ * modify it under the terms of the GNU General Public License
  * version 2 as published by the Free Software Foundation.
  *
  ******************************
@@ -51,7 +51,7 @@
 #include <TimeLib.h>
 
 
-#define CALIBRATE_FACTOR 60 // amount of rain per rain bucket tip e.g. 5 is .05mm
+#define CALIBRATE_FACTOR 15 // amount of rain per rain bucket tip e.g. 5 is .05mm
 #define EEPROM_BUFFER_LOCATION 0  // location of the EEPROM circular buffer
 #define E_BUFFER_LENGTH 240
 #define RAIN_BUCKET_SIZE 120
@@ -66,7 +66,7 @@ int eepromIndex;
 #define BATTERY_MAX_VOLTAGE 4.21 // V, nominal voltage at battery for powering up device
 #define BATTERY_MIN_VOLTAGE 2.9 // V, minimal voltage at which sensor still works
 unsigned long SLEEP_TIME = 60000UL; // Sleep time between reads (in milliseconds)
-int SEND_DATA_EVERY = 5 ; // send data to controller every n minutes
+int SEND_DATA_EVERY = 1 ; // send data to controller every n minutes
 const int ALTITUDE = 242; // <-- adapt this value to your own location's altitude.
 
 const char *weather[] = { "stable", "sunny", "cloudy", "unstable", "thunderstorm", "unknown" };
@@ -125,7 +125,7 @@ float lastPressureSamples[LAST_SAMPLES_COUNT];
 SI7021 sisensor;
 
 int minuteCount = 0;
-int sendCount = 0;
+int sendCount = -1;
 bool firstRound = true;
 // average value is used in forecast algorithm.
 float pressureAvg;
@@ -205,7 +205,7 @@ void setup()
   {
     Serial.println(F("Could not find a valid BMP180 sensor, check wiring!"));
   }
-  metric = getConfig().isMetric;
+  metric = getControllerConfig().isMetric;
 
   // setup SI7027 sensor
   if (!sisensor.begin())
@@ -282,14 +282,13 @@ void loop() {
   if (lulaby == 1) // running when interrupt wakes up by raingauge tip
   {
     thisTipTime = millis();
-    if (thisTipTime - lastTipTime > 700UL)  // debounce raingauge
-    {
+    //if (thisTipTime - lastTipTime > 50UL) { // debounce raingauge
       rainBucket[0] += CALIBRATE_FACTOR; // adds CALIBRATE_FACTOR hundredths of unit each tip
       wasTippedBuffer++;
       #ifdef MY_DEBUG
         Serial.println(F("It is raining..."));
       #endif
-    }
+    //}
     lastTipTime = thisTipTime;
     lastTipTimeRTC = now();
     if (lastRainTime == 0) {
@@ -321,7 +320,7 @@ void loop() {
 
   // increment sendCount every minute
   sendCount ++ ;
-  if (sendCount >= SEND_DATA_EVERY) { // send data every n minute
+  if (sendCount >= SEND_DATA_EVERY || sendCount <= 0) { // send data every n minute
     sendCount = 0 ;
 
     #ifdef MY_DEBUG
@@ -396,6 +395,8 @@ void loop() {
     // BMP180 sensor
     // get the pressure reading
     pressure = 0 ;
+    bmp.readTemperature();
+    wait(1000, C_INTERNAL, I_TIME);
     pressure = bmp.readSealevelPressure(ALTITUDE) / 100.0;
 
     forecast = sample(pressure);
@@ -451,10 +452,7 @@ void loop() {
     // get the moisture reading
     int moistureRead = analogRead(MOISTURE_SENSE_PIN);
 
-    int moisturePcnt = (moistureRead / 1023 ) * 100;
-    if (moisturePcnt >= 100 ) {
-      moisturePcnt = 100;
-    }
+    int moisturePcnt = map(moistureRead, 0, 1024, 0, 101);
 
     #ifdef MY_DEBUG
       Serial.print(F("Analog read moisture: "));
@@ -467,7 +465,7 @@ void loop() {
 
     // send moisture %
     if (moisturePcnt != oldMoisture) {
-      send(msgMoisture.set(moisturePcnt, 1));
+      send(msgMoisture.set(moisturePcnt, 0));
       wait(WAIT_BETWEEN_SEND, C_INTERNAL, I_TIME); // Wait before next message send
       send(msgMoisturePrefix.set("%"));  // Set custom unit.
       wait(WAIT_BETWEEN_SEND, C_INTERNAL, I_TIME); // Wait before next message send
@@ -480,8 +478,7 @@ void loop() {
     temperature = temperature /100 ;
 
     // humidity
-    float humidity = sisensor.getHumidityBasisPoints();
-    humidity = humidity /100 ;
+    int  humidity = sisensor.getHumidityPercent();
 
 
     #ifdef MY_DEBUG
@@ -618,11 +615,14 @@ void loop() {
     #endif
     // get the pressure reading but don't send data
     pressure = 0 ;
+    bmp.readTemperature();
+    wait(1000, C_INTERNAL, I_TIME);
     pressure = bmp.readSealevelPressure(ALTITUDE) / 100.0;
     forecast = sample(pressure);
   }
 
   // wait for time from controller
+  // I have some issues with GW and NRF24 time was not served in time due to high amount of radio traffic
   unsigned long functionTimeout = millis();
   if (gotTime == false) {
     #ifdef MY_DEBUG
